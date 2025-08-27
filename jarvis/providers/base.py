@@ -20,7 +20,7 @@ class LLMProvider(ABC):
         raise NotImplementedError
         
     @abstractmethod
-    async def close(self):
+    async def cleanup(self):
         """Cleanup resources."""
         raise NotImplementedError
 

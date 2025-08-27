@@ -153,7 +153,8 @@ class JarvisApplication:
         """Initialize the application."""
         try:
             # Load settings
-            self.settings = get_settings()
+            if self.settings is None:
+                self.settings = get_settings()
             
             # Set up logging
             setup_logging(self.settings)

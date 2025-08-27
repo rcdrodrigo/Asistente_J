@@ -24,8 +24,8 @@ class ToolRegistry:
     def default_registry(cls, settings):
         reg = cls()
         reg.add(SystemInfoTool(settings))
-        reg.add(DocTool())
-        reg.add(GitTool())
-        reg.add(FileAnalysisTool())
-        reg.add(CodeRunTool())
+        reg.add(DocTool(settings))
+        reg.add(GitTool(settings))
+        reg.add(FileAnalysisTool(settings))
+        reg.add(CodeRunTool(settings))
         return reg

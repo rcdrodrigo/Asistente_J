@@ -1,7 +1,7 @@
 """
 Ejemplo de uso del agente de texto a voz (TTS) de JARVIS.
 
-Este script muestra cómo usar la clase TextToSpeechAgent para convertir texto a voz
+Este script muestra cómo usar la clase TextToSpeechManager para convertir texto a voz
 y reproducirlo a través de los altavoces del sistema.
 """
 
@@ -16,12 +16,12 @@ logging.basicConfig(
 )
 
 async def main():
-    """Función principal que muestra el uso básico de TextToSpeechAgent."""
-    from jarvis import TextToSpeechAgent, TTSOptions
+    """Función principal que muestra el uso básico de TextToSpeechManager."""
+    from jarvis import TextToSpeechManager, TTSOptions
     
     # Crear una instancia del agente TTS
     print("Inicializando agente de texto a voz...")
-    tts = TextToSpeechAgent()
+    tts = TextToSpeechManager()
     
     try:
         # Reproducir un mensaje simple

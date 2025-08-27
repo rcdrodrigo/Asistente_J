@@ -6,6 +6,7 @@ import sys
 import signal
 import re
 import logging
+import time
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List, Union
@@ -14,20 +15,33 @@ from jarvis.config import JarvisSettings, get_settings
 from jarvis.core.agent import JarvisAgent, JarvisApplication
 from jarvis.utils.logger import setup_logging, get_logger
 from jarvis.exceptions import JarvisError
+from jarvis.tts_agent import TextToSpeechManager
+from typing import Optional
 
 logger = get_logger(__name__)
 
 class JarvisConsoleApp(JarvisApplication):
     """Aplicación de consola para JARVIS."""
     
-    def __init__(self):
+    def __init__(self, speak_responses: bool = False):
         super().__init__()
         self.is_running = False
+        self.speak_responses = speak_responses
+        self.tts_manager: Optional[TextToSpeechManager] = None
     
     async def initialize(self):
         """Inicializa la aplicación de consola."""
         await super().initialize()
+        if self.speak_responses:
+            print("🔊 El modo de respuestas habladas está activado.")
+            self.tts_manager = TextToSpeechManager(self.settings)
         self._show_welcome_message()
+
+    async def cleanup(self):
+        """Limpia los recursos de la aplicación de consola."""
+        if self.tts_manager:
+            await self.tts_manager.cleanup()
+        await super().cleanup()
     
     def _show_welcome_message(self):
         """Muestra el mensaje de bienvenida."""
@@ -63,8 +77,17 @@ class JarvisConsoleApp(JarvisApplication):
                         break
                         
                     # Procesar el mensaje y obtener respuesta
+                    start_time = time.perf_counter()
                     response = await self.agent.process_message(user_input)
+                    end_time = time.perf_counter()
+                    duration = end_time - start_time
+                    logger.info(f"Console command processing time: {duration:.4f} seconds")
+
                     print(f"\n🤖 {response}")
+
+                    # Hablar la respuesta si está activado
+                    if self.speak_responses and self.tts_manager:
+                        await self.tts_manager.speak(response)
                     
                 except KeyboardInterrupt:
                     print("\n👋 ¡Hasta luego!")
@@ -149,7 +172,7 @@ async def _start_simple_voice_mode(settings):
         print(f"❌ Error en modo voz simple: {e}")
         return False
 
-async def main():
+async def main(speak_responses: bool = False):
     """Función principal."""
     try:
         # Configurar manejador de señales
@@ -158,11 +181,15 @@ async def main():
         # Cargar configuración
         settings = get_settings()
         
+        # Forzar la desactivación del modo voz para la consola
+        settings.enable_voice = False
+
         # Configurar logging
         setup_logging(settings)
         
         # Inicializar y ejecutar la aplicación
-        app = JarvisConsoleApp()
+        app = JarvisConsoleApp(speak_responses=speak_responses)
+        app.settings = settings
         await app.initialize()
         await app.start_console_mode()
         
@@ -177,19 +204,23 @@ def print_usage():
     """Muestra información de uso."""
     print("\nUso: python -m jarvis [opciones]")
     print("\nOpciones:")
-    print("  --voice        Inicia en modo voz")
-    print("  --simple-voice Inicia en modo voz simple (sin STT)")
-    print("  --help         Muestra esta ayuda\n")
+    print("  --voice           Inicia en modo voz")
+    print("  --simple-voice    Inicia en modo voz simple (sin STT)")
+    print("  --speak-responses Habla las respuestas en modo consola")
+    print("  --help            Muestra esta ayuda\n")
     print("Ejemplos:")
-    print("  python -m jarvis             # Inicia modo consola")
-    print("  python -m jarvis --voice     # Inicia modo voz")
-    print("  python -m jarvis --simple-voice    # Inicia modo voz simple\n")
+    print("  python -m jarvis                       # Inicia modo consola")
+    print("  python -m jarvis --speak-responses   # Inicia modo consola con respuestas habladas")
+    print("  python -m jarvis --voice               # Inicia modo voz")
+    print("  python -m jarvis --simple-voice      # Inicia modo voz simple\n")
 
 async def cli_main():
     """Entry point para CLI."""
     if "--help" in sys.argv or "-h" in sys.argv:
         print_usage()
         return 0
+
+    speak_responses = "--speak-responses" in sys.argv
         
     if "--voice" in sys.argv:
         settings = get_settings()
@@ -198,7 +229,7 @@ async def cli_main():
         settings = get_settings()
         return await _start_simple_voice_mode(settings)
     else:
-        return await main()
+        return await main(speak_responses=speak_responses)
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(cli_main()))

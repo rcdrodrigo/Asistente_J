@@ -5,10 +5,12 @@ psutil>=5.9.0
 structlog>=22.1.0
 python-dotenv>=0.21.0
 aiohttp>=3.8.0  # Para comunicación con LM Studio
+beautifulsoup4>=4.9.0 # Para análisis de HTML en herramientas
 
 # Voz y audio offline
 pyttsx3>=2.90  # Síntesis de voz offline
 SpeechRecognition>=3.10.0  # Reconocimiento de voz
+PyAudio>=0.2.11 # Para acceso al micrófono
 faster-whisper>=0.9.0  # Modelo de reconocimiento de voz offline
 sounddevice>=0.4.6  # Para captura de audio
 numpy>=1.24.0  # Dependencia de faster-whisper

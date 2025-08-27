@@ -29,6 +29,7 @@ from .exceptions import (
     SpeechSynthesisError,
     handle_error
 )
+from .tts_agent import TextToSpeechManager
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -45,176 +46,6 @@ class VoiceState(Enum):
     PROCESSING = auto()
     SPEAKING = auto()
     ERROR = auto()
-
-@dataclass
-class TTSOptions:
-    """Opciones de configuración para la síntesis de voz."""
-    rate: int = 175  # Palabras por minuto
-    volume: float = 1.0  # 0.0 a 1.0
-    voice_id: Optional[str] = None
-    save_to_file: bool = False
-    output_file: Optional[Path] = None
-
-
-class PyTTSX3Engine:
-    """Motor de síntesis de voz utilizando pyttsx3."""
-    
-    def __init__(self, settings: Optional[JarvisSettings] = None):
-        """Inicializa el motor de síntesis de voz.
-        
-        Args:
-            settings: Configuración de JARVIS. Si no se proporciona, se cargará.
-        """
-        self.settings = settings or get_settings()
-        self.engine = self._init_engine()
-        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="TTS-Thread")
-        self._is_speaking = asyncio.Event()
-        self._stop_requested = asyncio.Event()
-        self._current_options = TTSOptions()
-        
-        # Configuración inicial
-        self._configure_voice()
-        logger.info("Motor de síntesis de voz inicializado")
-    
-    def _init_engine(self):
-        """Inicializa el motor de pyttsx3 con configuración básica."""
-        try:
-            engine = pyttsx3.init()
-            engine.setProperty('rate', self._current_options.rate)
-            engine.setProperty('volume', self._current_options.volume)
-            return engine
-        except Exception as e:
-            logger.error("No se pudo inicializar el motor de síntesis de voz", exc_info=True)
-            raise SpeechSynthesisError(
-                "Error al inicializar el motor de síntesis de voz",
-                original_error=str(e)
-            )
-    
-    def _configure_voice(self) -> None:
-        """Configura la voz según el idioma especificado en la configuración."""
-        try:
-            voices = self.engine.getProperty('voices')
-            lang_code = self.settings.voice_language.lower()
-            
-            # Buscar una voz que coincida con el idioma
-            for voice in voices:
-                if hasattr(voice, 'languages') and voice.languages:
-                    if lang_code in voice.languages[0].lower():
-                        self.engine.setProperty('voice', voice.id)
-                        logger.debug(f"Voz configurada: {voice.name} ({voice.id})")
-                        return
-            
-            logger.warning(f"No se encontró una voz para el idioma '{lang_code}'. Usando voz por defecto.")
-                
-        except Exception as e:
-            logger.warning(f"No se pudo configurar la voz: {e}")
-    
-    @handle_error(default_return=None, raise_custom=SpeechSynthesisError)
-    async def synthesize(
-        self, 
-        text: str, 
-        options: Optional[TTSOptions] = None
-    ) -> Optional[bytes]:
-        """Sintetiza texto a voz de manera asíncrona.
-        
-        Args:
-            text: Texto a sintetizar.
-            options: Opciones de síntesis. Si no se proporciona, se usan las predeterminadas.
-            
-        Returns:
-            bytes: Audio generado en formato WAV o None si hay un error.
-            
-        Raises:
-            SpeechSynthesisError: Si hay un error al sintetizar el texto.
-        """
-        if not text.strip():
-            logger.warning("Se intentó sintetizar un texto vacío")
-            return None
-            
-        options = options or self._current_options
-        self._current_options = options
-        self._stop_requested.clear()
-        self._is_speaking.set()
-        
-        try:
-            # Actualizar propiedades del motor
-            self.engine.setProperty('rate', options.rate)
-            self.engine.setProperty('volume', options.volume)
-            
-            if options.voice_id:
-                self.engine.setProperty('voice', options.voice_id)
-            
-            # Ejecutar en un hilo separado
-            loop = asyncio.get_running_loop()
-            
-            if options.save_to_file and options.output_file:
-                # Guardar a archivo de forma asíncrona
-                output_path = Path(options.output_file).with_suffix('.wav')
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                def save_to_file():
-                    self.engine.save_to_file(text, str(output_path))
-                    self.engine.runAndWait()
-                    return output_path
-                
-                file_path = await loop.run_in_executor(self.executor, save_to_file)
-                logger.debug(f"Audio guardado en: {file_path}")
-                
-                # Leer el archivo generado y devolverlo
-                if file_path.exists():
-                    with open(file_path, 'rb') as f:
-                        return f.read()
-                return None
-                
-            else:
-                # Reproducir directamente
-                await loop.run_in_executor(
-                    self.executor, 
-                    self.engine.say,
-                    text
-                )
-                await loop.run_in_executor(
-                    self.executor, 
-                    self.engine.runAndWait
-                )
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error al sintetizar voz: {e}", exc_info=True)
-            raise SpeechSynthesisError(
-                f"Error al sintetizar voz: {str(e)}",
-                text=text,
-                options=options.__dict__
-            )
-            
-        finally:
-            self._is_speaking.clear()
-    
-    async def stop(self) -> None:
-        """Detiene la reproducción de voz actual."""
-        self._stop_requested.set()
-        # pyttsx3 no tiene un método stop directo, pero podemos intentar interrumpir
-        if self._is_speaking.is_set():
-            try:
-                self.engine.stop()
-                # Reiniciar el motor para limpiar el estado
-                self.engine = self._init_engine()
-            except Exception as e:
-                logger.warning(f"Error al detener la reproducción: {e}")
-    
-    async def cleanup(self) -> None:
-        """Libera los recursos del motor de síntesis de voz."""
-        try:
-            await self.stop()
-            self.executor.shutdown(wait=True)
-            logger.info("Motor de síntesis de voz liberado")
-        except Exception as e:
-            logger.error(f"Error al limpiar el motor de síntesis: {e}")
-    
-    def __del__(self):
-        """Asegura la liberación de recursos al destruir la instancia."""
-        if hasattr(self, 'executor') and self.executor:
-            self.executor.shutdown(wait=False)
 
 
 class WhisperSTT:
@@ -333,7 +164,7 @@ class VoiceJarvisAgent:
         self.state = VoiceState.IDLE
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
-        self.tts_engine = PyTTSX3Engine(self.settings)
+        self.tts_engine = TextToSpeechManager(self.settings)
         self.stt_engine = WhisperSTT(self.settings)
         self._is_listening = False
         self._stop_event = asyncio.Event()
@@ -357,7 +188,7 @@ class VoiceJarvisAgent:
         )
         
         # Inicializar el motor de texto a voz
-        self.tts_engine = PyTTSX3Engine()
+        self.tts_engine = TextToSpeechManager(self.settings)
         
         # Configurar el reconocedor de voz
         with self.microphone as source:
@@ -437,7 +268,7 @@ class VoiceJarvisAgent:
             return
             
         try:
-            await self.tts_engine.synthesize(text)
+            await self.tts_engine.speak(text)
         except Exception as e:
             logger.error(f"Error al reproducir voz: {e}")
     

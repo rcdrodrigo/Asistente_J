@@ -5,7 +5,7 @@ Este paquete proporciona la funcionalidad central para el asistente de voz JARVI
 incluyendo capacidades de texto a voz y procesamiento de comandos de voz.
 """
 
-from .tts_agent import TextToSpeechAgent, TTSOptions
+from .tts_agent import TextToSpeechManager, TTSOptions
 
 __version__ = "0.1.0"
-__all__ = ['TextToSpeechAgent', 'TTSOptions']
+__all__ = ['TextToSpeechManager', 'TTSOptions']

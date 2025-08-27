@@ -96,7 +96,7 @@ class LMStudioProvider(LLMProvider):
             raise RuntimeError("LM Studio session not initialized. Call initialize() first.")
         return self._session
     
-    async def close(self) -> None:
+    async def cleanup(self) -> None:
         """Close the HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()

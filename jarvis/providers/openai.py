@@ -75,7 +75,7 @@ class OpenAIProvider(LLMProvider):
             logger.error(f"Error in OpenAI API request: {str(e)}")
             raise
 
-    async def close(self):
+    async def cleanup(self):
         """Close the HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()

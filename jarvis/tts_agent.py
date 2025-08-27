@@ -29,8 +29,8 @@ class TTSOptions:
     save_to_file: bool = False
     output_file: Optional[Path] = None
 
-class TextToSpeechAgent:
-    """Agente de texto a voz simplificado para JARVIS."""
+class TextToSpeechManager:
+    """Manager de texto a voz para JARVIS."""
     
     def __init__(self, settings: Optional[JarvisSettings] = None):
         """Inicializa el agente de texto a voz.
