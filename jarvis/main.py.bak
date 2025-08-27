@@ -1,0 +1,308 @@
+# jarvis\main.py
+"""JARVIS v2.0 - Versión completa para Windows."""
+
+import asyncio
+import sys
+import signal
+import re
+import logging
+from datetime import datetime
+from contextlib import asynccontextmanager
+from typing import Dict, Any, Optional, List, Union
+
+from .config import JarvisSettings, load_settings
+from .core.agent import JarvisAgent, JarvisApplication, VoiceJarvisAgent
+from .utils.logger import setup_logging, get_logger
+from .exceptions import JarvisError
+from .simple_voice import SimpleVoiceAgent
+
+logger = get_logger(__name__)
+
+
+class JarvisConsoleApp(JarvisApplication):
+    def __init__(self, settings):
+        super().__init__(settings)
+        self.is_running = False
+
+    async def initialize(self):
+        await super().initialize()
+        print("="*70)
+        print("💡 **Comandos especiales:**")
+        print("  • 'help' - Mostrar ayuda completa")
+        print("  • 'stats' - Estadísticas de la sesión")
+        print("  • 'status' - Estado del sistema")
+        print("  • 'quit' - Salir de JARVIS")
+        print("\n💻 **Ejemplos de uso:**")
+        print("  • Ejecuta: print('Hola mundo')")
+        print("  • Información del sistema")
+        print("  • ¿Cómo crear una función en Python?")
+        print("-"*70 + "\n")
+        
+        self.is_running = True
+        
+        while self.is_running:
+            try:
+                user_input = input("🎤 **Usuario:** ").strip()
+                
+                if not user_input:
+                    continue
+                
+                # Comandos especiales
+                if user_input.lower() in ['quit', 'exit', 'salir']:
+                    break
+                elif user_input.lower() == 'help':
+                    self._show_help()
+                    continue
+                elif user_input.lower() == 'stats':
+                    print(f"\n{self.agent.get_session_stats()}")
+                    continue
+                elif user_input.lower() == 'status':
+                    await self._show_system_status()
+                    continue
+                elif user_input.lower() == 'clear':
+                    import os
+                    os.system('cls')  # Limpiar pantalla en Windows
+                    continue
+                
+                # Procesar mensaje
+                print("🤖 **JARVIS:** Procesando...")
+                response = await self.agent.process_message(user_input)
+                print(f"\n🤖 **JARVIS:** {response}\n")
+                
+            except KeyboardInterrupt:
+                print("\n\n👋 **Interrumpido por usuario**")
+                break
+            except EOFError:
+                print("\n\n👋 **Finalizando sesión**")
+                break
+            except Exception as e:
+                logger.error(f"Error en consola: {e}")
+                print(f"\n❌ **Error:** {e}\n")
+        
+        print("\n👋 **¡Gracias por usar JARVIS v2.0!**")
+        print(f"📊 **Resumen final:**")
+        print(self.agent.get_session_stats())
+    
+    def _show_help(self):
+        """Muestra ayuda completa."""
+        help_text = f"""
+🆘 **JARVIS v2.0 - GUÍA COMPLETA**
+
+📋 **COMANDOS ESPECIALES:**
+  • help     - Muestra esta ayuda
+  • stats    - Estadísticas de la sesión actual
+  • status   - Estado actual del sistema
+  • clear    - Limpiar pantalla
+  • quit     - Salir de JARVIS
+
+💻 **EJECUCIÓN DE CÓDIGO:**
+  • "Ejecuta: print('Hola mundo')"
+  • "Corre: for i in range(5): print(i)"
+  • ```python
+    def saludar(nombre):
+        return f"Hola {{nombre}}"
+    print(saludar("Usuario"))
+    ```
+
+🖥️ **INFORMACIÓN DEL SISTEMA:**
+  • "Información del sistema"
+  • "Estado de la CPU"
+  • "Uso de memoria"
+  • "Espacio en disco"
+
+💬 **ASISTENCIA DE PROGRAMACIÓN:**
+  • "¿Cómo crear una lista en Python?"
+  • "Explica las funciones lambda"
+  • "Mejores prácticas para manejar errores"
+  • "¿Qué es la programación orientada a objetos?"
+
+🔒 **CONFIGURACIÓN DE SEGURIDAD:**
+  • Ejecución de código: {'✅ Habilitada' if self.settings.enable_code_execution else '❌ Deshabilitada'}
+  • Sandbox: Windows Restringido
+  • Timeout: {self.settings.code_execution_timeout}s
+  • Memoria máxima: {self.settings.max_memory_mb}MB
+
+🤖 **INFORMACIÓN TÉCNICA:**
+  • Modelo LLM: {self.settings.ollama_model}
+  • Servidor: {self.settings.ollama_base_url}
+  • Versión: 2.0.0
+  • Plataforma: Windows
+
+💡 **CONSEJOS:**
+  • Sé específico en tus preguntas
+  • Usa bloques de código con ``` para mejor formato
+  • JARVIS puede explicar errores y sugerir mejoras
+  • Pregunta sobre buenas prácticas de programación
+"""
+        print(help_text)
+    
+    async def _show_system_status(self):
+        """Muestra estado del sistema."""
+        try:
+            status = await self.agent.system_tool.execute()
+            print(f"\n{status}")
+        except Exception as e:
+            print(f"\n❌ Error obteniendo estado del sistema: {e}")
+    
+    async def cleanup(self):
+        """Limpia recursos."""
+        self.is_running = False
+        if self.agent:
+            await self.agent.cleanup()
+    
+    @asynccontextmanager
+    async def lifespan(self):
+        """Context manager para gestión de ciclo de vida."""
+        try:
+            await self.initialize()
+            yield self
+        finally:
+            await self.cleanup()
+
+
+def handle_signal(signum, frame):
+    """Maneja señales del sistema."""
+    print(f"\n⚠️ Señal recibida: {signum}")
+    import sys
+    sys.exit(0)
+
+
+async def start_voice_mode(settings):
+    """Inicia el modo de voz de JARVIS en modo local."""
+    from jarvis.voice_agent import VoiceJarvisAgent
+    import asyncio
+    
+    logger.info("Iniciando modo de voz local...")
+    print("\n🔊 Modo de voz local activado")
+    print("Escribe tus comandos en la consola.")
+    print("Presiona Ctrl+C para salir.\n")
+
+    try:
+        voice_agent = VoiceJarvisAgent(settings)
+        await voice_agent.initialize()
+
+        while True:
+            try:
+                text = input("Tú: ").strip()
+
+                if text.lower() in ["salir", "exit", "quit"]:
+                    break
+
+                if not text:
+                    continue
+
+                response = await voice_agent.process_voice_command("local_session", text)
+                print(f"JARVIS: {response}")
+
+            except KeyboardInterrupt:
+                print("\nSaliendo del modo de voz local...")
+                break
+
+    except Exception as e:
+        logger.error(f"Error en modo de voz local: {e}")
+        print(f"Error: {e}")
+    finally:
+        print("Modo de voz local finalizado.")
+        if voice_agent:
+            await voice_agent.cleanup() # Ensure cleanup is called
+
+
+async def _start_simple_voice_mode(settings):
+    """Inicia el modo de voz simple basado en consola."""
+    from .simple_voice import SimpleVoiceAgent
+    
+    print("\n🔊 Modo de voz simple activado (sin LiveKit)")
+    print("Escribe tus comandos en la consola.")
+    print("Comandos: 'ayuda', 'estado', 'salir'")
+    print("Presiona Ctrl+C para salir.\n")
+    
+    try:
+        voice_agent = SimpleVoiceAgent(settings)
+        await voice_agent.initialize()
+        
+        while True:
+            try:
+                text = input("Tú: ").strip()
+                
+                if text.lower() in ["salir", "exit", "quit"]:
+                    break
+                    
+                if not text:
+                    continue
+                    
+                response = await voice_agent.process_text_command(text)
+                print(f"JARVIS: {response}")
+                
+            except KeyboardInterrupt:
+                print("\nSaliendo del modo de voz...")
+                break
+                
+    except Exception as e:
+        logger.error(f"Error en modo de voz simple: {e}")
+        print(f"Error: {e}")
+    finally:
+        print("Modo de voz finalizado.")
+
+
+async def main():
+    """Función principal."""
+    if len(sys.argv) < 2:
+        print_usage()
+        sys.exit(1)
+
+    command = sys.argv[1].lower()
+    
+    if command == "console":
+        app = JarvisApplication()
+        app.start_console_mode()
+    elif command == "voice" or command == "voz":
+        settings = JarvisSettings()
+        settings.enable_voice = True
+        await start_voice_mode(settings)
+    elif command == "version":
+        print("JARVIS v2.0")
+    elif command == "help":
+        print_usage()
+    else:
+        print(f"Comando no reconocido: {command}")
+        print_usage()
+        sys.exit(1)
+
+
+def print_usage():
+    """Muestra información de uso."""
+    print("""
+🚀 **JARVIS v2.0 - Asistente de Programación**
+
+USAGE:
+  python -m jarvis.main [COMMAND]
+
+COMMANDS:
+  console    Inicia la consola interactiva
+  voice      Inicia el modo de voz simple
+  help       Muestra esta ayuda
+  version    Muestra la versión
+
+EJEMPLOS:
+  python -m jarvis.main console
+  python -m jarvis.main voice
+  • Python 3.9+
+  • Ollama instalado y ejecutándose
+  • Modelo deepseek-coder:6.7b descargado
+""")
+
+
+def cli_main():
+    """Entry point para CLI."""
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n👋 Terminado por usuario")
+    except Exception as e:
+        print(f"❌ Error fatal: {e}")
+        import sys
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    cli_main()

@@ -1,0 +1,10 @@
+"""
+Paquete principal de JARVIS.
+
+Este paquete proporciona las funcionalidades principales del asistente JARVIS,
+incluyendo el agente de texto a voz y otras utilidades.
+"""
+
+from .tts_agent import TextToSpeechAgent, TTSOptions
+
+__all__ = ['TextToSpeechAgent', 'TTSOptions']

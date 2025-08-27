@@ -1,0 +1,22 @@
+# Dependencias principales
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+psutil>=5.9.0
+structlog>=22.1.0
+python-dotenv>=0.21.0
+aiohttp>=3.8.0  # Para comunicación con LM Studio
+
+# Voz y audio offline
+pyttsx3>=2.90  # Síntesis de voz offline
+SpeechRecognition>=3.10.0  # Reconocimiento de voz
+faster-whisper>=0.9.0  # Modelo de reconocimiento de voz offline
+sounddevice>=0.4.6  # Para captura de audio
+numpy>=1.24.0  # Dependencia de faster-whisper
+torch>=2.0.0  # Motor de IA para whisper
+
+# Dependencias de desarrollo
+pytest>=7.0.0
+pytest-asyncio>=0.20.0
+black>=22.0.0
+isort>=5.10.0
+mypy>=0.991
