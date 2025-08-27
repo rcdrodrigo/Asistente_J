@@ -39,11 +39,11 @@ class TextToSpeechAgent:
             settings: Configuración de JARVIS. Si no se proporciona, se cargará.
         """
         self.settings = settings or get_settings()
+        self._current_options = TTSOptions()
         self.engine = self._init_engine()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="TTS-Thread")
         self._is_speaking = asyncio.Event()
         self._stop_requested = asyncio.Event()
-        self._current_options = TTSOptions()
         
         # Configuración inicial
         self._configure_voice()
